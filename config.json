@@ -1,0 +1,27 @@
+{
+  "credentials": {
+    "telegram_api_id": "",
+    "telegram_api_hash": "",
+    "bot_token": "",
+    "groq_api_key": "",
+    "telegram_session": "",
+    "admin_id": "1190237801"
+  },
+  "daily_quota": 100,
+  "quota_used_today": 2,
+  "quota_date": "2026-03-13",
+  "delay_seconds": 30,
+  "reply_delay_seconds": 5,
+  "ai_model": "llama-3.3-70b-versatile",
+  "auto_reply_enabled": true,
+  "groq_api_key": "",
+  "daily_program": "",
+  "knowledge_base": [
+    "Je m'appelle Sossou Kouamé Apollinaire, je suis développeur professionnel.",
+    "Je propose des formations sur le jeu Baccara 1xbet : 90 dollars — Formation complète avec stratégies et techniques gagnantes.",
+    "Je crée des bots Telegram personnalisés avec hébergement inclus : 30 dollars — Bot clé en main, hébergement pris en charge.",
+    "Je propose des stratégies professionnelles pour les cartes enseignes Baccara : 50 dollars — Stratégie testée et efficace.",
+    "Je suis expert en automatisation Telegram, développement de bots, et stratégies de jeu Baccara sur 1xbet.",
+    "Mon numéro de contact WhatsApp : +2290195501564 — Les gens peuvent m'appeler ou m'écrire sur WhatsApp."
+  ]
+}

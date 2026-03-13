@@ -1,0 +1,4 @@
+pyrogram==2.0.106
+TgCrypto
+groq
+python-telegram-bot==20.7

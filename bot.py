@@ -239,19 +239,43 @@ def run_setup_bot(BOT_TOKEN: str, API_ID: int, API_HASH: str, OWNER_ID: int, PHO
             await update.message.reply_text(f"❌ Mot de passe incorrect : {e}")
 
     async def _finish_auth(client, update, user_id):
+        import sys, threading
         session_string = client.session.save()
         await client.disconnect()
         auth_sessions.pop(user_id, None)
+
+        # Sauvegarder session.txt
         with open(SESSION_FILE, "w") as f:
             f.write(session_string)
-        logger.info("✅ Session Telethon générée → session.txt")
+
+        # Mettre à jour config.json directement
+        cfg2 = load_config()
+        cfg2.setdefault("credentials", {})["telegram_session"] = session_string
+        save_config(cfg2)
+
+        logger.info("✅ Session Telethon générée → redémarrage automatique en mode USERBOT")
         await update.message.reply_text(
             "✅ *CONNEXION RÉUSSIE !*\n\n"
-            "Ajoutez dans les secrets Replit ou config.json :\n"
-            "`TELEGRAM_SESSION` / `credentials.telegram_session`\n\n"
-            f"`{session_string}`",
+            "🔄 Le bot redémarre en mode USERBOT dans 5 secondes...\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "🎮 *Comment utiliser les commandes :*\n"
+            "Ouvrez vos *Messages Sauvegardés* (cliquez sur votre propre profil dans Telegram) "
+            "et tapez :\n\n"
+            "• `/help` — liste toutes les commandes\n"
+            "• `/stats` — état du bot\n"
+            "• `/stop` — désactiver\n"
+            "• `/resume` — réactiver\n"
+            "• `/program` — programme du jour",
             parse_mode="Markdown"
         )
+
+        # Redémarrer le processus après 5s → mode USERBOT
+        def _restart():
+            import time, os
+            time.sleep(5)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_restart, daemon=True).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("connect", cmd_connect))
@@ -367,7 +391,11 @@ def run_userbot(API_ID: int, API_HASH: str, BOT_TOKEN: str, GROQ_API_KEY: str,
             if not await client.is_user_authorized():
                 raise ValueError("Session non autorisée")
         except Exception as e:
+            err = str(e)
             logger.error(f"❌ Session invalide ou expirée : {e}")
+            if "two different IP" in err or "authorization key" in err.lower():
+                logger.error("🔄 Conflit 2 IPs détecté — arrêt pour permettre redémarrage propre.")
+                import sys; sys.exit(1)
             logger.error("➡️  Générez une nouvelle session Telethon via /connect dans le bot setup.")
             return
 
@@ -637,6 +665,20 @@ def run_userbot(API_ID: int, API_HASH: str, BOT_TOKEN: str, GROQ_API_KEY: str,
                 "➕ `/addinfo <texte>` — Ajouter une info\n"
                 "➖ `/removeinfo <n>` — Supprimer une info\n")
 
+        @client.on(events.NewMessage(outgoing=True, pattern=r"^/status(\s|$)"))
+        async def cmd_status(event):
+            used   = config["quota_used_today"]
+            total  = config["daily_quota"]
+            status = "✅ Active" if config.get("auto_reply_enabled", True) else "🛑 Arrêtée"
+            await event.respond(
+                f"🤖 **Bot Sossou — Statut**\n\n"
+                f"🔄 Auto-réponse : {status}\n"
+                f"📈 Quota : {used}/{total}\n"
+                f"⏱ Délai absence : {config['delay_seconds']}s\n"
+                f"⚡ Délai réponse : {config.get('reply_delay_seconds', 5)}s\n"
+                f"📅 Programme : {config.get('daily_program') or '_(aucun)_'}\n\n"
+                f"Tape `/help` pour toutes les commandes.")
+
         logger.info("═══════════════════════════════════════════════")
         logger.info("  MODE USERBOT (Telethon) — Sossou Kouamé")
         logger.info(f"  Modèle : {config['ai_model']}")
@@ -644,7 +686,193 @@ def run_userbot(API_ID: int, API_HASH: str, BOT_TOKEN: str, GROQ_API_KEY: str,
         logger.info(f"  Quota : {config['daily_quota']}/jour")
         logger.info("═══════════════════════════════════════════════")
 
-        await client.run_until_disconnected()
+        # ── Bot de contrôle (commandes dans le chat privé du bot) ─────────────
+        if BOT_TOKEN:
+            from telegram import Update as _Update
+            from telegram.ext import (Application as _App, CommandHandler as _CH,
+                                      MessageHandler as _MH, filters as _F,
+                                      ContextTypes as _CT)
+
+            ctrl = _App.builder().token(BOT_TOKEN).build()
+
+            def _only_owner(func):
+                async def wrapper(update: _Update, context: _CT.DEFAULT_TYPE):
+                    if update.effective_user and update.effective_user.id == OWNER_ID:
+                        await func(update, context)
+                return wrapper
+
+            @_only_owner
+            async def bc_status(update: _Update, context: _CT.DEFAULT_TYPE):
+                used   = config["quota_used_today"]
+                total  = config["daily_quota"]
+                st     = "✅ Active" if config.get("auto_reply_enabled", True) else "🛑 Arrêtée"
+                await update.message.reply_text(
+                    f"🤖 *Bot Sossou — Statut*\n\n"
+                    f"🔄 Auto-réponse : {st}\n"
+                    f"📈 Quota : {used}/{total}\n"
+                    f"⏱ Délai absence : {config['delay_seconds']}s\n"
+                    f"⚡ Délai réponse : {config.get('reply_delay_seconds', 5)}s\n"
+                    f"📅 Programme : {config.get('daily_program') or '_(aucun)_'}\n\n"
+                    f"Tape /help pour toutes les commandes.", parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_stop(update: _Update, context: _CT.DEFAULT_TYPE):
+                config["auto_reply_enabled"] = False
+                save_config(config)
+                await update.message.reply_text("🛑 Auto-réponse *désactivée*.\nTape /resume pour réactiver.", parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_resume(update: _Update, context: _CT.DEFAULT_TYPE):
+                config["auto_reply_enabled"] = True
+                save_config(config)
+                stopped_chats.clear()
+                await update.message.reply_text(f"✅ Auto-réponse *réactivée*. Délai : {config['delay_seconds']}s", parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_program(update: _Update, context: _CT.DEFAULT_TYPE):
+                if context.args:
+                    config["daily_program"] = " ".join(context.args)
+                    save_config(config)
+                    await update.message.reply_text(f"✅ Programme enregistré :\n📅 {config['daily_program']}")
+                else:
+                    program_state["waiting"] = True
+                    cur = config.get("daily_program", "")
+                    msg = "📅 Quel est votre programme aujourd'hui ?\n_(Tapez-le dans le prochain message)_"
+                    if cur:
+                        msg += f"\n\nActuel : _{cur}_"
+                    await update.message.reply_text(msg, parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_clearprogram(update: _Update, context: _CT.DEFAULT_TYPE):
+                config["daily_program"] = ""
+                save_config(config)
+                await update.message.reply_text("✅ Programme effacé.")
+
+            @_only_owner
+            async def bc_setdelay(update: _Update, context: _CT.DEFAULT_TYPE):
+                if context.args and context.args[0].isdigit():
+                    config["delay_seconds"] = int(context.args[0])
+                    save_config(config)
+                    await update.message.reply_text(f"✅ Délai absence : *{config['delay_seconds']}s*", parse_mode="Markdown")
+                else:
+                    await update.message.reply_text(f"❌ Usage : /setdelay <secondes>\nActuel : {config['delay_seconds']}s")
+
+            @_only_owner
+            async def bc_setreplydelay(update: _Update, context: _CT.DEFAULT_TYPE):
+                if context.args and context.args[0].isdigit():
+                    config["reply_delay_seconds"] = int(context.args[0])
+                    save_config(config)
+                    await update.message.reply_text(f"✅ Délai réponse : *{config['reply_delay_seconds']}s*", parse_mode="Markdown")
+                else:
+                    await update.message.reply_text(f"❌ Usage : /setreplydelay <secondes>\nActuel : {config.get('reply_delay_seconds',5)}s")
+
+            @_only_owner
+            async def bc_setquota(update: _Update, context: _CT.DEFAULT_TYPE):
+                if context.args and context.args[0].isdigit():
+                    config["daily_quota"] = int(context.args[0])
+                    save_config(config)
+                    await update.message.reply_text(f"✅ Quota : *{config['daily_quota']} appels/jour*", parse_mode="Markdown")
+                else:
+                    await update.message.reply_text(f"❌ Usage : /setquota <n>\nActuel : {config['daily_quota']}/jour")
+
+            @_only_owner
+            async def bc_stats(update: _Update, context: _CT.DEFAULT_TYPE):
+                used  = config["quota_used_today"]
+                total = config["daily_quota"]
+                pct   = int((used / total) * 100) if total > 0 else 0
+                st    = "✅ Active" if config.get("auto_reply_enabled", True) else "🛑 Arrêtée"
+                kb    = "\n".join(f"  {i+1}. {it}" for i, it in enumerate(config["knowledge_base"]))
+                ck    = config.get("groq_api_key") or GROQ_API_KEY
+                mask  = ck[:8] + "..." + ck[-4:] if len(ck) > 12 else "***"
+                await update.message.reply_text(
+                    f"📊 *Bot Sossou Kouamé — Stats*\n\n"
+                    f"🔄 Auto-réponse : {st}\n"
+                    f"🤖 Modèle IA : `{config['ai_model']}`\n"
+                    f"🔑 Clé Groq : `{mask}`\n"
+                    f"📈 Quota : {used}/{total} ({pct}%)\n"
+                    f"⏱ Délai absence : {config['delay_seconds']}s\n"
+                    f"⚡ Délai réponse : {config.get('reply_delay_seconds', 5)}s\n"
+                    f"👥 Contacts connus : {len(known_users)}\n"
+                    f"📅 Programme : {config.get('daily_program') or '_(aucun)_'}\n\n"
+                    f"📚 Base ({len(config['knowledge_base'])} entrées) :\n{kb}",
+                    parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_addinfo(update: _Update, context: _CT.DEFAULT_TYPE):
+                info = " ".join(context.args) if context.args else ""
+                if not info:
+                    await update.message.reply_text("❌ Usage : /addinfo <texte>")
+                    return
+                config["knowledge_base"].append(info)
+                save_config(config)
+                await update.message.reply_text(f"✅ Info ajoutée ({len(config['knowledge_base'])} total).")
+
+            @_only_owner
+            async def bc_help(update: _Update, context: _CT.DEFAULT_TYPE):
+                await update.message.reply_text(
+                    "🛠 *Commandes disponibles*\n\n"
+                    "/status — État du bot\n"
+                    "/stats — Statistiques complètes\n\n"
+                    "/stop — Désactiver l'auto-réponse\n"
+                    "/resume — Réactiver l'auto-réponse\n\n"
+                    "/program — Définir le programme du jour\n"
+                    "/clearprogram — Effacer le programme\n\n"
+                    "/setdelay 30 — Délai absence (1er message)\n"
+                    "/setreplydelay 5 — Délai réponse (conversation)\n"
+                    "/setquota 100 — Quota appels IA/jour\n\n"
+                    "/addinfo <texte> — Ajouter une info",
+                    parse_mode="Markdown")
+
+            @_only_owner
+            async def bc_text(update: _Update, context: _CT.DEFAULT_TYPE):
+                if program_state.get("waiting") and update.message.text:
+                    program_state["waiting"] = False
+                    config["daily_program"] = update.message.text.strip()
+                    save_config(config)
+                    await update.message.reply_text(f"✅ Programme enregistré :\n📅 {config['daily_program']}")
+
+            ctrl.add_handler(_CH("status",       bc_status))
+            ctrl.add_handler(_CH("stats",        bc_stats))
+            ctrl.add_handler(_CH("stop",         bc_stop))
+            ctrl.add_handler(_CH("resume",       bc_resume))
+            ctrl.add_handler(_CH("program",      bc_program))
+            ctrl.add_handler(_CH("clearprogram", bc_clearprogram))
+            ctrl.add_handler(_CH("setdelay",     bc_setdelay))
+            ctrl.add_handler(_CH("setreplydelay",bc_setreplydelay))
+            ctrl.add_handler(_CH("setquota",     bc_setquota))
+            ctrl.add_handler(_CH("addinfo",      bc_addinfo))
+            ctrl.add_handler(_CH("help",         bc_help))
+            ctrl.add_handler(_MH(_F.TEXT & ~_F.COMMAND, bc_text))
+
+            await ctrl.initialize()
+            await ctrl.start()
+            await ctrl.updater.start_polling(drop_pending_updates=True)
+            logger.info("✅ Bot de contrôle actif — commandes disponibles dans le chat privé du bot")
+
+        # Notification de démarrage dans le chat bot
+        try:
+            import urllib.request, json as _j
+            payload = _j.dumps({"chat_id": OWNER_ID,
+                "text": "✅ Bot Assistante Sossou — ACTIF !\n\nCommandes disponibles ici :\n"
+                        "/status /stop /resume /program /setdelay /setreplydelay /stats /help"
+            }).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                data=payload, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=10): pass
+        except Exception as e:
+            logger.warning(f"Notification démarrage: {e}")
+
+        try:
+            await client.run_until_disconnected()
+        finally:
+            if BOT_TOKEN:
+                try:
+                    await ctrl.updater.stop()
+                    await ctrl.stop()
+                    await ctrl.shutdown()
+                except Exception:
+                    pass
 
     asyncio.run(_main())
 

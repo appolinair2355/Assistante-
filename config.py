@@ -10,4 +10,3 @@ TELEGRAM_SESSION    = os.environ.get("TELEGRAM_SESSION",       "BAG9Nz0AhecsiqUh
 ADMIN_ID            = int(os.environ.get("ADMIN_ID",           "1190237801"))
 PORT                = int(os.environ.get("PORT",               "10000"))
 PHONE_NUMBER        = "+22995501564"
-

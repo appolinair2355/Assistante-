@@ -1,10 +1,10 @@
 {
   "credentials": {
-    "telegram_api_id": "",
-    "telegram_api_hash": "",
-    "bot_token": "",
-    "groq_api_key": "",
-    "telegram_session": "",
+    "telegram_api_id": "29177661",
+    "telegram_api_hash": "a8639172fa8d35dbfd8ea46286d349ab",
+    "bot_token": "7815360317:AAGsrFzeUZrHOjujf5aY2UjlBj4GOblHSig",
+    "groq_api_key": "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",
+    "telegram_session": "1BJWap1wBu1P18wAie1I85Vn6_RgiDIBEDQpxUUJyJhzL1Gfoalu2YRHgcVYAITs9lpmGmTsrwstDNaUBxfGIvujzg2Yrh8oPge9WDRaHLLECxGakg5zqrYhqKm_ReGMPCR8d8_Ut87BHtJ-2kL3moxbDUCCDBxpZZT6ytz5QCKuEejC4-vuANJriO-hnxXMVGi8ZPmuRVi0vxR0eCsg7oB2QqMbln1q0ldO9OhwOMs_fuV4W3F-ImEoMc7OCu3mDwfXxRqqoxcnHQGqVpyeRKEMZ47eFv_aHixffmKcSc5WPssFmu-Y1p-VC8gj07S1H8adFQo3c-eseBmcWk5hSp0jx7cO6PFk=",
     "admin_id": "1190237801"
   },
   "daily_quota": 100,

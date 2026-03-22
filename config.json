@@ -2,9 +2,9 @@
   "credentials": {
     "telegram_api_id": "29177661",
     "telegram_api_hash": "a8639172fa8d35dbfd8ea46286d349ab",
-    "bot_token": "8442253971:AAEisYucgZ49Ej2b-mK9_6DhNrqh9WOc_XU",
+    "bot_token": "",
     "telegram_session": "",
-    "admin_id": "1190237801"
+    "admin_id": ""
   },
   "daily_quota": 200,
   "quota_used_today": 0,
@@ -17,16 +17,11 @@
   "ai_providers": {
     "groq": {
       "model": "llama-3.3-70b-versatile",
-      "keys": [
-        "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",
-        "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"
-      ]
+      "keys": []
     },
     "openai": {
       "model": "gpt-4o-mini",
-      "keys": [
-        "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"
-      ]
+      "keys": []
     },
     "anthropic": {
       "model": "claude-3-haiku-20240307",
@@ -34,9 +29,7 @@
     },
     "gemini": {
       "model": "gemini-2.0-flash",
-      "keys": [
-        "AIzaSyDuYtbPekvi99ZVA1r3kCJhm0YyoIPPed4"
-      ]
+      "keys": []
     },
     "mistral": {
       "model": "mistral-small-latest",
@@ -70,27 +63,6 @@
     }
   ],
   "daily_program": [],
-  "reminders": [
-    {
-      "id": 1774141597,
-      "text": "A 10h je serai a l'église",
-      "contact": "Enseignant",
-      "deadline": "2026-03-22T10:00",
-      "created": "22/03/2026 02:06",
-      "notified": true
-    }
-  ],
-  "requests": [
-    {
-      "id": 1774133032,
-      "contact": "Andre konan",
-      "contact_id": 6283225677,
-      "text": "Oui un exemple vas y",
-      "summary": "demande d'exemple",
-      "category": "autre",
-      "date": "21/03/2026 23:43",
-      "status": "pending",
-      "ai_suggestion": ""
-    }
-  ]
+  "reminders": [],
+  "requests": []
 }

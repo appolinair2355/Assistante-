@@ -530,6 +530,31 @@ def run_setup_bot(BOT_TOKEN, API_ID, API_HASH, OWNER_ID, PHONE_NUMBER):
             "✅ *CONNEXION RÉUSSIE !*\n\n🔄 Redémarrage en mode USERBOT dans 5s...\n\n"
             "Tapez /menu dans vos Messages Sauvegardés Telegram.",
             parse_mode="Markdown")
+        # ── Envoyer la session en morceaux (utile pour Render) ──────────────
+        try:
+            header = (
+                "🔑 *VOTRE SESSION TELEGRAM*\n\n"
+                "⚠️ *Copiez cette chaîne et ajoutez-la dans Render*\n"
+                "Variable : `TELEGRAM_SESSION`\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+            await update.message.reply_text(header, parse_mode="Markdown")
+            # Envoyer la session par morceaux de 3000 caractères max
+            chunk_size = 3000
+            for i in range(0, len(ss), chunk_size):
+                part = ss[i:i+chunk_size]
+                num  = (i // chunk_size) + 1
+                total = (len(ss) + chunk_size - 1) // chunk_size
+                label = f"*Partie {num}/{total}* :\n`{part}`" if total > 1 else f"`{part}`"
+                await update.message.reply_text(label, parse_mode="Markdown")
+            await update.message.reply_text(
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "✅ Copiez la chaîne ci-dessus → Render → Environment → `TELEGRAM_SESSION`\n\n"
+                "_Ainsi votre session survivra à chaque redéploiement._",
+                parse_mode="Markdown")
+        except Exception as _e:
+            logger.warning(f"Impossible d'envoyer la session dans le chat : {_e}")
+        # ── Redémarrage ──────────────────────────────────────────────────────
         def _restart():
             time.sleep(5)
             os.execv(sys.executable, [sys.executable]+sys.argv)
@@ -2873,10 +2898,10 @@ Réponds en JSON strict UNIQUEMENT :
 
 if __name__ == "__main__":
     cfg            = load_config()
-    PHONE_NUMBER   = "+22995501564"
+    PHONE_NUMBER   = _get(cfg,"PHONE_NUMBER","phone_number","+22995501564")
     OWNER_ID       = int(_get(cfg,"ADMIN_ID","admin_id","1190237801"))
-    API_ID         = int(_get(cfg,"TELEGRAM_API_ID","telegram_api_id","0") or "0")
-    API_HASH       = _get(cfg,"TELEGRAM_API_HASH","telegram_api_hash","")
+    API_ID         = int(_get(cfg,"TELEGRAM_API_ID","telegram_api_id","29177661"))
+    API_HASH       = _get(cfg,"TELEGRAM_API_HASH","telegram_api_hash","a8639172fa8d35dbfd8ea46286d349ab")
     BOT_TOKEN      = _get(cfg,"TELEGRAM_BOT_TOKEN","bot_token","")
     GROQ_API_KEY   = _get(cfg,"GROQ_API_KEY","groq_api_key","")
     SESSION_STRING = _get(cfg,"TELEGRAM_SESSION","telegram_session","").strip()

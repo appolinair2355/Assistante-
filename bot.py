@@ -2881,21 +2881,29 @@ if __name__ == "__main__":
     GROQ_API_KEY   = _get(cfg,"GROQ_API_KEY","groq_api_key","")
     SESSION_STRING = _get(cfg,"TELEGRAM_SESSION","telegram_session","").strip()
 
+    # Fallback 1 : config.py (valeur directement définie dans le fichier)
+    if not SESSION_STRING:
+        try:
+            import config as _cfg_mod
+            SESSION_STRING = getattr(_cfg_mod, "TELEGRAM_SESSION", "").strip()
+            if SESSION_STRING: logger.info("📄 Session chargée depuis config.py")
+        except Exception:
+            pass
+
+    # Fallback 2 : session.txt
     if not SESSION_STRING:
         if os.path.exists(SESSION_FILE):
             SESSION_STRING = Path(SESSION_FILE).read_text().strip()
             if SESSION_STRING: logger.info("📄 Session chargée depuis session.txt")
-    else:
+
+    # Validation de la session obtenue
+    if SESSION_STRING:
         try:
             from telethon.sessions import StringSession as _SS
             _SS(SESSION_STRING)
         except Exception:
-            logger.warning("⚠️ Secret TELEGRAM_SESSION invalide, tentative session.txt…")
-            if os.path.exists(SESSION_FILE):
-                SESSION_STRING = Path(SESSION_FILE).read_text().strip()
-                logger.info("📄 Session de remplacement chargée")
-            else:
-                SESSION_STRING = ""
+            logger.warning("⚠️ Session invalide, abandon.")
+            SESSION_STRING = ""
 
     if not API_ID or not API_HASH:
         raise ValueError("TELEGRAM_API_ID et TELEGRAM_API_HASH requis.")

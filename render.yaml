@@ -7,16 +7,3 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     healthCheckPath: /
-    envVars:
-      - key: TELEGRAM_API_ID
-        value: "29177661"
-      - key: TELEGRAM_API_HASH
-        value: "a8639172fa8d35dbfd8ea46286d349ab"
-      - key: TELEGRAM_BOT_TOKEN
-        value: "8442253971:AAEisYucgZ49Ej2b-mK9_6DhNrqh9WOc_XU"
-      - key: TELEGRAM_SESSION
-        value: "1BJWap1wBu0g_phkaACyeK4R57GPHlcjVwwS3mQzXXyagAq1qBHiWShyY2pDHYScRds6c_7Ug6xZnH6DjwQ19dttKvZ7FXhQTfIagaDV2p1sH_UWOlhiBIeVMuuH9PuaqhVRj073jrQZwIvalHgysDFptv2XXEYfXb7ipc-I3TgnIY_IZe0ZJA8cCm6kD7SjZviFQpCVzH6vt1oKj_Qrh2nF2JirC2qj2qAenYCzZmB7qwuP6tWaT6pgbEGdpnxvfwYiLf9q_ml9l18eUMt1BrH3CSYyeMa4JBqvDcz3rSngBAsAUjif2xfkuw-RB4WSkkgo0E8xp8h7gqwcwUbUhXDKTGng7VE0="
-      - key: ADMIN_ID
-        value: "1190237801"
-      - key: GEMINI_API_KEY
-        value: "AIzaSyDuYtbPekvi99ZVA1r3kCJhm0YyoIPPed4"

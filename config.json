@@ -1,10 +1,10 @@
 {
   "credentials": {
-    "telegram_api_id": "",
-    "telegram_api_hash": "",
-    "bot_token": "",
+    "telegram_api_id": "29177661",
+    "telegram_api_hash": "a8639172fa8d35dbfd8ea46286d349ab",
+    "bot_token": "7653246287:AAH7-HVGo9EqUo8DWfhnleZSN3Y8Gp5_Nfg",
     "telegram_session": "",
-    "admin_id": ""
+    "admin_id": "1190237801"
   },
   "daily_quota": 200,
   "quota_used_today": 0,

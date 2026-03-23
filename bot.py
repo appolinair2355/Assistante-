@@ -3039,14 +3039,26 @@ if __name__ == "__main__":
     GROQ_API_KEY   = _get(cfg,"GROQ_API_KEY","groq_api_key","")
     SESSION_STRING = _get(cfg,"TELEGRAM_SESSION","telegram_session","").strip()
 
-    # Fallback 1 : config.py (valeur directement définie dans le fichier)
-    if not SESSION_STRING:
-        try:
-            import config as _cfg_mod
-            SESSION_STRING = getattr(_cfg_mod, "TELEGRAM_SESSION", "").strip()
+    # Fallback 1 : config.py — lit TOUTES les variables non encore définies
+    try:
+        import config as _cfg_mod
+        if not PHONE_NUMBER:
+            PHONE_NUMBER   = getattr(_cfg_mod, "PHONE_NUMBER",       "+22995501564")
+        if not OWNER_ID:
+            OWNER_ID       = int(getattr(_cfg_mod, "ADMIN_ID",       "1190237801") or "1190237801")
+        if not API_ID:
+            API_ID         = int(getattr(_cfg_mod, "TELEGRAM_API_ID","0") or "0")
+        if not API_HASH:
+            API_HASH       = getattr(_cfg_mod, "TELEGRAM_API_HASH",  "")
+        if not BOT_TOKEN:
+            BOT_TOKEN      = getattr(_cfg_mod, "TELEGRAM_BOT_TOKEN", "")
+        if not GROQ_API_KEY:
+            GROQ_API_KEY   = getattr(_cfg_mod, "GROQ_API_KEY",       "")
+        if not SESSION_STRING:
+            SESSION_STRING = getattr(_cfg_mod, "TELEGRAM_SESSION",   "").strip()
             if SESSION_STRING: logger.info("📄 Session chargée depuis config.py")
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     # Fallback 2 : session.txt
     if not SESSION_STRING:

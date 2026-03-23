@@ -1,14 +1,14 @@
 {
   "credentials": {
-    "telegram_api_id": "29177661",
-    "telegram_api_hash": "a8639172fa8d35dbfd8ea46286d349ab",
+    "telegram_api_id": "",
+    "telegram_api_hash": "",
     "bot_token": "",
     "telegram_session": "",
     "admin_id": ""
   },
   "daily_quota": 200,
   "quota_used_today": 0,
-  "quota_date": "2026-03-22",
+  "quota_date": "2026-03-23",
   "delay_seconds": 30,
   "reply_delay_seconds": 10,
   "auto_reply_enabled": true,
@@ -16,52 +16,34 @@
   "active_ai": "gemini",
   "ai_providers": {
     "groq": {
-      "model": "llama-3.3-70b-versatile",
-      "keys": []
+      "keys": [],
+      "model": "llama-3.3-70b-versatile"
     },
     "openai": {
-      "model": "gpt-4o-mini",
-      "keys": []
+      "keys": [],
+      "model": "gpt-4o-mini"
     },
     "anthropic": {
-      "model": "claude-3-haiku-20240307",
-      "keys": []
+      "keys": [],
+      "model": "claude-3-haiku-20240307"
     },
     "gemini": {
-      "model": "gemini-2.0-flash",
-      "keys": []
+      "keys": [],
+      "model": "gemini-2.0-flash"
     },
     "mistral": {
-      "model": "mistral-small-latest",
-      "keys": []
+      "keys": [],
+      "model": "mistral-small-latest"
     }
   },
   "knowledge_base": [
-    "Je m'appelle Sossou Kouamé Apollinaire, je suis développeur professionnel basé au Bénin.",
-    "Je propose des formations sur le jeu Baccara 1xbet : 90 dollars — Formation complète avec stratégies et techniques gagnantes.",
-    "Je crée des bots Telegram personnalisés avec hébergement inclus : 30 dollars — Bot clé en main, hébergement pris en charge.",
-    "Je propose des stratégies professionnelles pour les cartes enseignes Baccara : 50 dollars — Stratégie testée et efficace.",
-    "Je suis expert en automatisation Telegram, développement de bots, et stratégies de jeu Baccara sur 1xbet.",
-    "Mon numéro de contact WhatsApp : +22995501564 — Les gens peuvent m'appeler ou m'écrire sur WhatsApp."
+    "Je m’appelle Sossou Kouamé Apollinaire, je suis développeur professionnel basé au Bénin.",
+    "Je propose des formations sur le jeu Baccara 1xbet : 90 dollars.",
+    "Je crée des bots Telegram personnalisés avec hébergement inclus : 30 dollars.",
+    "Je propose des stratégies professionnelles pour Baccara 1xbet : 50 dollars.",
+    "Mon numéro WhatsApp : +22995501564"
   ],
-  "baccara_strategies": [
-    {
-      "name": "Stratégie 1 — Même carte",
-      "description": "Lorsque le joueur reçoit la même carte deux fois de suite, miser sur cette même carte au jeu suivant."
-    },
-    {
-      "name": "Stratégie 2 — Victoire après match nul",
-      "description": "Après un match nul (Tie), prédire que le Joueur va gagner le jeu suivant."
-    },
-    {
-      "name": "Stratégie 3 — Joueur 0 vs Banquier 8",
-      "description": "Si dans un jeu le Joueur a 0 et le Banquier a 8, prédire que le Joueur va gagner le jeu suivant."
-    },
-    {
-      "name": "Stratégie 4 — Comptage des matchs nuls",
-      "description": "Si le Joueur a 2 cartes et le Banquier a 3 cartes, compter le nombre de jeux consécutifs sans match nul. Si ce nombre dépasse 20, prédire un match nul (Tie) au jeu suivant."
-    }
-  ],
+  "baccara_strategies": [],
   "daily_program": [],
   "reminders": [],
   "requests": []

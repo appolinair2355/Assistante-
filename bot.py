@@ -51,9 +51,8 @@ DEFAULT_CONFIG = {
     # Modes
     "auto_reply_enabled": True,
     "stealth_mode":        True,    # True = répond comme Sossou lui-même
-    # IA
+    # IA (aucune clé pré-configurée — l'admin les ajoute via /menu → 🤖 Fournisseurs IA)
     "active_ai":   "gemini",
-    "ai_model":    "gemini-2.0-flash",
     "ai_providers": {
         k: {"keys": [], "model": v["model"]}
         for k, v in AI_META.items()
@@ -166,15 +165,20 @@ def _http(url, payload, headers):
 
 # ── Quota tracking multi-clés (en mémoire) ─────────────────────────────────────
 _quota_exhausted: dict = {}   # {(provider, idx): timestamp}
-QUOTA_RESET_SECS = 3600       # réessai après 1h
+# Délais de retry selon le type d'erreur :
+# rate limit (429) = court (90s), quota/crédits épuisés = long (1h)
+RATE_LIMIT_RESET_SECS = 90      # Gemini/Groq rate limit → retry après 90s
+QUOTA_RESET_SECS      = 3600    # Crédits épuisés → retry après 1h
 
 def _is_quota_ok(provider: str, idx: int) -> bool:
-    ts = _quota_exhausted.get((provider, idx))
-    return ts is None or (time.time() - ts) > QUOTA_RESET_SECS
+    ts, reset = _quota_exhausted.get((provider, idx), (None, QUOTA_RESET_SECS))
+    return ts is None or (time.time() - ts) > reset
 
-def _mark_quota_exhausted(provider: str, idx: int):
-    _quota_exhausted[(provider, idx)] = time.time()
-    logger.warning(f"⚠️ Quota épuisé {provider}[{idx}] — bascule vers clé suivante")
+def _mark_quota_exhausted(provider: str, idx: int, is_rate_limit: bool = False):
+    reset = RATE_LIMIT_RESET_SECS if is_rate_limit else QUOTA_RESET_SECS
+    _quota_exhausted[(provider, idx)] = (time.time(), reset)
+    label = "limite de fréquence" if is_rate_limit else "quota/crédits épuisés"
+    logger.warning(f"⚠️ {label} {provider}[{idx}] — retry dans {reset}s")
 
 def _is_quota_error(e: Exception) -> bool:
     msg = str(e).lower()
@@ -182,6 +186,13 @@ def _is_quota_error(e: Exception) -> bool:
         "429", "quota", "rate limit", "rate_limit",
         "resource exhausted", "too many requests", "exceeded"
     ))
+
+def _is_rate_limit_error(e: Exception) -> bool:
+    """Distingue les rate limits temporaires (429 RPM) des quotas épuisés (crédits)."""
+    msg = str(e).lower()
+    is_429 = "429" in msg or "too many requests" in msg or "rate limit" in msg or "rate_limit" in msg
+    is_quota = "quota" in msg or "resource exhausted" in msg or "exceeded your" in msg or "billing" in msg
+    return is_429 and not is_quota
 
 
 def verify_key(provider, api_key, model) -> tuple[bool, str]:
@@ -195,6 +206,15 @@ def verify_key(provider, api_key, model) -> tuple[bool, str]:
     }
     if not fmt_ok.get(provider, True):
         return False, f"❌ Format de clé incorrect pour {provider}"
+
+    # Gemini : ne pas faire d'appel test — la limite de fréquence (15 req/min) déclenche
+    # systématiquement un 429 même sur une clé neuve. On valide seulement le format.
+    if provider == "gemini":
+        return True, (
+            f"✅ Clé Gemini enregistrée — format valide.\n"
+            f"Modèle : `{model}`\n"
+            f"_La clé sera testée automatiquement au premier message reçu._"
+        )
 
     try:
         if provider == "groq":
@@ -212,11 +232,6 @@ def verify_key(provider, api_key, model) -> tuple[bool, str]:
                 {"model": model, "max_tokens": 5, "messages": [{"role":"user","content":"Hi"}]},
                 {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
             return True, f"✅ Clé valide — Modèle : `{model}`"
-        elif provider == "gemini":
-            r = _http(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
-                {"contents": [{"parts": [{"text": "Hi"}]}]},
-                {"Content-Type": "application/json"})
-            return True, f"✅ Clé valide — Modèle : `{model}`"
         elif provider == "mistral":
             r = _http("https://api.mistral.ai/v1/chat/completions",
                 {"model": model, "messages": [{"role":"user","content":"Hi"}], "max_tokens": 5},
@@ -224,11 +239,19 @@ def verify_key(provider, api_key, model) -> tuple[bool, str]:
             return True, f"✅ Clé valide — Modèle : `{model}`"
     except Exception as e:
         err = str(e)
-        # 429 = clé valide mais quota/crédits insuffisants sur le compte
-        if "429" in err or "too many" in err.lower() or "rate_limit" in err.lower() or "quota" in err.lower():
+        # 429 : deux cas différents
+        is_rate_lim = "429" in err or "too many" in err.lower() or "rate limit" in err.lower()
+        is_quota    = "quota" in err.lower() or "resource exhausted" in err.lower() or "billing" in err.lower()
+        if is_rate_lim and not is_quota:
             return True, (
-                f"⚠️ Clé acceptée — mais quota dépassé ou crédits insuffisants.\n"
-                f"Rechargez votre compte {provider.capitalize()} et réessayez.\n"
+                f"✅ Clé acceptée — limite de fréquence temporaire (normal).\n"
+                f"La clé fonctionnera dans quelques secondes automatiquement.\n"
+                f"_Aucune action requise._"
+            )
+        if is_rate_lim or is_quota:
+            return True, (
+                f"⚠️ Clé acceptée — quota/crédits épuisés sur votre compte.\n"
+                f"Rechargez votre compte {provider.capitalize()} ou créez une nouvelle clé.\n"
                 f"`{err[:120]}`"
             )
         if "404" in err or "not found" in err.lower():
@@ -447,7 +470,7 @@ def start_health_server():
             self.wfile.write(body)
         def log_message(self, *a): pass
 
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     threading.Thread(
         target=HTTPServer(("0.0.0.0", port), H).serve_forever,
         daemon=True
@@ -606,7 +629,8 @@ def run_userbot(API_ID, API_HASH, BOT_TOKEN, GROQ_API_KEY, SESSION_STRING, OWNER
 
     # ── Helpers ──────────────────────────────────────────────────────────────────
 
-    _ctrl_active = [True]   # [False] si conflit 409 — désactive les envois locaux
+    _ctrl_active  = [True]   # [False] si conflit 409 — désactive les envois locaux
+    _client_ref   = [None]   # Référence partagée vers le client Telethon
 
     def _send_bot(text: str, parse_mode="Markdown"):
         if not _ctrl_active[0]:
@@ -621,10 +645,23 @@ def run_userbot(API_ID, API_HASH, BOT_TOKEN, GROQ_API_KEY, SESSION_STRING, OWNER
         except Exception as e:
             logger.warning(f"send_bot: {e}")
 
+    _ai_key_alerted = [False]   # Eviter de spammer la notif "clés manquantes"
+
     async def notify(text: str):
         if not _ctrl_active[0]:
             return
-        await asyncio.get_event_loop().run_in_executor(None, _send_bot, text)
+        if BOT_TOKEN:
+            await asyncio.get_event_loop().run_in_executor(None, _send_bot, text)
+        else:
+            # Fallback : envoyer via le userbot lui-même (Saved Messages)
+            tg = _client_ref[0]
+            if tg:
+                try:
+                    await tg.send_message("me", text, parse_mode="md")
+                except Exception as e:
+                    logger.warning(f"notify fallback: {e}")
+            else:
+                logger.debug(f"notify (client non prêt) : {text[:80]}")
 
     def _get_ai():
         """Retourne (provider, première_clé_valide, model) pour affichage/stats."""
@@ -654,7 +691,7 @@ def run_userbot(API_ID, API_HASH, BOT_TOKEN, GROQ_API_KEY, SESSION_STRING, OWNER
                                          max_tokens, temperature)
                 except Exception as e:
                     if _is_quota_error(e):
-                        _mark_quota_exhausted(provider, idx)
+                        _mark_quota_exhausted(provider, idx, is_rate_limit=_is_rate_limit_error(e))
                         last_err = e
                         continue
                     raise
@@ -752,9 +789,17 @@ def run_userbot(API_ID, API_HASH, BOT_TOKEN, GROQ_API_KEY, SESSION_STRING, OWNER
             return reply
         except Exception as e:
             err = str(e)
-            if any(k in err.lower() for k in ("401","unauthorized","expired","invalid","non configurées")):
-                await notify(f"⚠️ *Toutes les clés IA sont épuisées !*\n\n"
-                             f"Erreur : `{err[:200]}`\n\nAjoutez des clés via /menu → 🤖 Fournisseurs IA")
+            needs_alert = any(k in err.lower() for k in (
+                "401","unauthorized","expired","invalid","non configurées","épuisées"
+            ))
+            if needs_alert and not _ai_key_alerted[0]:
+                _ai_key_alerted[0] = True
+                await notify(
+                    "⚠️ *Aucune clé IA fonctionnelle !*\n\n"
+                    "L'assistante répond 'Un instant stp' à tous les messages car aucune clé API n'est configurée.\n\n"
+                    "👉 *Solution :* envoie /menu → 🤖 Fournisseurs IA → ajoute au moins une clé (Groq, Gemini, etc.)\n\n"
+                    f"_Erreur : {err[:150]}_"
+                )
             return "Un instant stp 😊" if config.get("stealth_mode", True) else \
                    "Je suis momentanément indisponible. Je vous réponds dès que possible 🙏"
 
@@ -1291,6 +1336,7 @@ Réponds en JSON strict UNIQUEMENT :
             [Button.inline("💡 Analyser & Proposer solutions",      b"sec_a")],
             [Button.inline("📋 Résumé du jour (IA)",                b"sec_r")],
             [Button.inline("📝 Rappels enregistrés",                b"rem")],
+            [Button.inline("🗑 Tout effacer (RAZ)",                 b"sec_wipe")],
             [Button.inline("🔙 Menu principal",                     b"mm")],
         ]
 
@@ -1616,6 +1662,7 @@ Réponds en JSON strict UNIQUEMENT :
             await client.connect()
             if not await client.is_user_authorized():
                 raise ValueError("Session non autorisée")
+            _client_ref[0] = client   # rendre le client accessible à notify()
         except Exception as e:
             err = str(e)
             logger.error(f"❌ Session invalide : {e}")
@@ -1987,6 +2034,36 @@ Réponds en JSON strict UNIQUEMENT :
                 await event.edit("📤 Génération du résumé...", buttons=None)
                 result = await text_sec_resume()
                 await event.edit(result[:3000], buttons=mk_sec_menu())
+
+            elif data == "sec_wipe":
+                nb = len(sec_log)
+                nb_msgs = sum(len(v.get("msgs",[])) for v in sec_log.values())
+                await event.edit(
+                    f"⚠️ *Effacer toutes les données ?*\n\n"
+                    f"Cela supprimera définitivement :\n"
+                    f"• {nb} contact(s) enregistré(s)\n"
+                    f"• {nb_msgs} message(s) archivé(s)\n"
+                    f"• Toutes les analyses IA\n\n"
+                    f"_Cette action est irréversible._",
+                    buttons=[
+                        [Button.inline("✅ Oui, tout effacer", b"sec_wipe_ok")],
+                        [Button.inline("❌ Annuler",            b"sec")],
+                    ])
+
+            elif data == "sec_wipe_ok":
+                sec_log.clear()
+                conv_history.clear()
+                known_users.clear()
+                _coached_convs.clear()
+                _analysis_cache.clear()
+                save_sec_log(sec_log)
+                _ai_key_alerted[0] = False  # Réactiver les alertes clé IA
+                await event.edit(
+                    "✅ *Données effacées avec succès !*\n\n"
+                    "Toutes les conversations et contacts ont été supprimés.\n"
+                    "L'assistante repart de zéro.",
+                    buttons=[[Button.inline("🔙 Menu principal", b"mm")]])
+
             elif data == "rem":
                 await event.edit(text_reminders(), buttons=[
                     [Button.inline("➕ Ajouter un rappel", b"rem_a")],
@@ -2089,6 +2166,7 @@ Réponds en JSON strict UNIQUEMENT :
                     f"{report[:3500]}",
                     buttons=[
                         [Button.inline("🔄 Réanalyser", b"coach_force")],
+                        [Button.inline("🗑 Supprimer ce rapport", b"coach_del")],
                         [Button.inline("🔙 Menu", b"mm")],
                     ])
 
@@ -2118,8 +2196,16 @@ Réponds en JSON strict UNIQUEMENT :
                     f"{report[:3500]}",
                     buttons=[
                         [Button.inline("🔄 Réanalyser", b"coach_force")],
+                        [Button.inline("🗑 Supprimer ce rapport", b"coach_del")],
                         [Button.inline("🔙 Menu", b"mm")],
                     ])
+
+            elif data == "coach_del":
+                try:
+                    await event.delete()
+                except Exception:
+                    await event.edit("🗑 Rapport supprimé.",
+                                     buttons=[[Button.inline("🔙 Menu", b"mm")]])
 
             # ── Stratégies Baccara ─────────────────────────────────────────────
             elif data == "strat":
@@ -2438,6 +2524,7 @@ Réponds en JSON strict UNIQUEMENT :
                     [_IKB("💡 Analyser & Proposer solutions",        callback_data="sec_a")],
                     [_IKB("📋 Résumé du jour (IA)",                  callback_data="sec_r")],
                     [_IKB("📝 Rappels",                              callback_data="rem")],
+                    [_IKB("🗑 Tout effacer (RAZ)",                   callback_data="sec_wipe")],
                     [_IKB("➕ Ajouter rappel manuel",                callback_data="rem_a"),
                      _IKB("🔙 Menu",                                 callback_data="mm")],
                 ])
@@ -2549,6 +2636,33 @@ Réponds en JSON strict UNIQUEMENT :
                     await edit("📤 Génération du résumé...", None)
                     result = await text_sec_resume()
                     await edit(result[:4000], bk_sec())
+                elif d == "sec_wipe":
+                    nb = len(sec_log)
+                    nb_msgs = sum(len(v.get("msgs",[])) for v in sec_log.values())
+                    kb = _IKM([
+                        [_IKB("✅ Oui, tout effacer", callback_data="sec_wipe_ok")],
+                        [_IKB("❌ Annuler",            callback_data="sec")],
+                    ])
+                    await edit(
+                        f"⚠️ *Effacer toutes les données ?*\n\n"
+                        f"Cela supprimera définitivement :\n"
+                        f"• {nb} contact(s) enregistré(s)\n"
+                        f"• {nb_msgs} message(s) archivé(s)\n"
+                        f"• Toutes les analyses IA\n\n"
+                        f"_Cette action est irréversible._", kb)
+                elif d == "sec_wipe_ok":
+                    sec_log.clear()
+                    conv_history.clear()
+                    known_users.clear()
+                    _coached_convs.clear()
+                    _analysis_cache.clear()
+                    save_sec_log(sec_log)
+                    _ai_key_alerted[0] = False
+                    kb = _IKM([[_IKB("🔙 Menu", callback_data="mm")]])
+                    await edit(
+                        "✅ *Données effacées avec succès !*\n\n"
+                        "Toutes les conversations et contacts ont été supprimés.\n"
+                        "L'assistante repart de zéro.", kb)
                 elif d == "rem":
                     kb = _IKM([[_IKB("🔙 Secrétariat", callback_data="sec")]])
                     await edit(text_reminders(), kb)
@@ -2739,9 +2853,20 @@ Réponds en JSON strict UNIQUEMENT :
                                 "Tu es le coach personnel de Sossou Kouamé.",
                                 [{"role":"user","content":prompt}],
                                 max_tokens=400, temperature=0.5)
-                            await edit(f"🎓 *Coaching IA*\n\n{rapport[:3800]}", _IKM([[_IKB("🔙 Menu", callback_data="mm")]]))
+                            await edit(
+                                f"🎓 *Coaching IA*\n\n{rapport[:3800]}",
+                                _IKM([
+                                    [_IKB("🗑 Supprimer ce rapport", callback_data="coach_del")],
+                                    [_IKB("🔙 Menu", callback_data="mm")],
+                                ]))
                     except Exception as e:
                         await edit(f"❌ Erreur : {e}", _IKM([[_IKB("🔙 Menu", callback_data="mm")]]))
+
+                elif d == "coach_del":
+                    try:
+                        await query.message.delete()
+                    except Exception:
+                        await edit("🗑 Rapport supprimé.", _IKM([[_IKB("🔙 Menu", callback_data="mm")]]))
 
             # ── Messages texte control bot ─────────────────────────────────────
 
@@ -2867,14 +2992,22 @@ Réponds en JSON strict UNIQUEMENT :
 
         # ── Notification de démarrage ──────────────────────────────────────────
         try:
-            active = config.get("active_ai","groq")
-            _send_bot(
-                f"✅ *Bot Sossou — ACTIF !*\n\n"
-                f"🤖 IA : {AI_META[active]['name']}\n"
+            active  = config.get("active_ai", "gemini")
+            ai_name = AI_META.get(active, {}).get("name", active)
+            has_keys = any(
+                len(config["ai_providers"].get(p, {}).get("keys", [])) > 0
+                for p in AI_META
+            )
+            ai_status = f"🤖 IA : {ai_name}" if has_keys else "⚠️ Aucune clé IA — configure via /menu → 🤖 Fournisseurs IA"
+            await notify(
+                f"✅ *Assista Kouamé — ACTIF !*\n\n"
+                f"{ai_status}\n"
                 f"🕵️ Furtif : {'ON' if config.get('stealth_mode',True) else 'OFF'}\n"
                 f"🕐 Heure Bénin : {benin_time()}\n\n"
-                f"👉 Tapez /menu pour les commandes", "Markdown")
-        except: pass
+                f"👉 Tapez /menu pour les commandes"
+            )
+        except Exception as _e:
+            logger.debug(f"Notification démarrage : {_e}")
 
         asyncio.create_task(reminder_checker())
         asyncio.create_task(coaching_checker())
